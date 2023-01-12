@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jmoiron/sqlx"
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/nats-io/stan.go"
 	"html/template"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -14,11 +16,12 @@ import (
 
 const (
 	clusterID = "test-cluster"
-	clientID  = "client-1"
+	clientID  = "client-consumer"
 	natsUrl   = "0.0.0.0:4223"
 )
 
 type Delivery struct {
+	Id      int    `db:"id" json:"id"`
 	Name    string `db:"name" json:"name,omitempty"`
 	Phone   string `db:"phone" json:"phone,omitempty"`
 	Zip     string `db:"zip" json:"zip,omitempty"`
@@ -29,6 +32,7 @@ type Delivery struct {
 }
 
 type Payment struct {
+	Id           int    `db:"id" json:"id"`
 	Transaction  string `db:"transaction" json:"transaction,omitempty"`
 	RequestId    string `db:"request_id" json:"request_id,omitempty"`
 	Currency     string `db:"currency" json:"currency,omitempty"`
@@ -42,6 +46,7 @@ type Payment struct {
 }
 
 type Item struct {
+	Id          int    `db:"id" json:"id"`
 	ChrtId      int    `db:"chrt_id" json:"chrt_id,omitempty"`
 	TrackNumber string `db:"track_number" json:"track_number,omitempty"`
 	Price       int    `db:"price" json:"price,omitempty"`
@@ -56,6 +61,7 @@ type Item struct {
 }
 
 type Order struct {
+	Id                int       `db:"id" json:"id"`
 	OrderUID          string    `db:"order_uid" json:"order_uid,omitempty"`
 	TrackNumber       string    `db:"track_number" json:"track_number,omitempty"`
 	Entry             string    `db:"entry" json:"entry,omitempty"`
@@ -79,7 +85,7 @@ func seed(db *sqlx.DB) ([]Order, error) {
 		return nil, err
 	}
 	for _, order := range orders {
-		db.Select(&order.Items, "select * from items where order_id=$1", order.OrderUID)
+		db.Select(&order.Items, "select * from items where order_id=$1", order.Id)
 	}
 	return orders, nil
 }
@@ -92,7 +98,7 @@ func storeDB(db *sqlx.DB, order *Order) error {
 	}
 	insertItemQuery := "insert into items (chrt_id, track_number, price, rid, name, sale, size, total_price, nm_id, brand, status, order_id) values"
 	for _, item := range order.Items {
-		_, err = tx.Exec(insertItemQuery + "($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+		_, err = tx.Exec(insertItemQuery+"($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
 			item.ChrtId, item.TrackNumber, item.Price, item.Rid, item.Name, item.Sale, item.Size, item.TotalPrice, item.NmId, item.Brand, item.Status, order.OrderUID)
 		if err != nil {
 			tx.Rollback()
@@ -142,56 +148,60 @@ func getOrder(res http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	tmpl, _ := template.ParseFiles("template/order.html")
+	tmpl, _ := template.ParseFiles("templates/order.html")
 	tmpl.Execute(res, order)
 }
 
 var orders []Order
 
 func main() {
-	DBUser := os.Getenv("DB_USER")
-	DBPassword := os.Getenv("DB_PASSWORD")
-	DBName := os.Getenv("DB_NAME")
-	SSLMode := os.Getenv("SSL_MODE")
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found")
+		return
+	}
+	DBUser, _ := os.LookupEnv("DB_USER")
+	DBPassword, _ := os.LookupEnv("DB_PASSWORD")
+	DBName, _ := os.LookupEnv("DB_NAME")
+	SSLMode, _ := os.LookupEnv("SSL_MODE")
 
 	db, err := sqlx.Connect("postgres", fmt.Sprintf("user=%s password=%s dbname=%s sslmode=%s",
 		DBUser, DBPassword, DBName, SSLMode))
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		return
 	}
 	orders, err = seed(db)
 
 	sc, err := stan.Connect(clusterID, clientID, stan.NatsURL(natsUrl))
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		return
 	}
 	defer sc.Close()
 
-	err = sc.Publish("orders", []byte("Hello World"))
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	//err = sc.Publish("orders", []byte("Hello World"))
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
 
 	sub, err := sc.Subscribe("orders", func(m *stan.Msg) {
 		var order Order
-		fmt.Printf("Received a message: %s\n", string(m.Data))
+		log.Printf("Received a message: %s\n", string(m.Data))
 		err = json.Unmarshal(m.Data, &order)
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 			return
 		}
 		err = storeDB(db, &order)
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 			return
 		}
 		orders = append(orders, order)
 	})
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		return
 	}
 
@@ -200,7 +210,7 @@ func main() {
 	http.HandleFunc("/orders/", getOrder)
 	err = http.ListenAndServe(":3000", nil)
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		return
 	}
 }
