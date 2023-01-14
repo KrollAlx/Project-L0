@@ -2,6 +2,7 @@ package nats
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/nats-io/stan.go"
 	"log"
 	"project-L0/internal/models"
@@ -17,13 +18,13 @@ func New(service service.Orders) *OrdersHandler {
 }
 
 func (h *OrdersHandler) Create(m *stan.Msg) {
-	var order models.Order
+	log.Println("Message received")
 
-	log.Printf("Received a message: %s\n", string(m.Data))
+	var order models.Order
 
 	err := json.Unmarshal(m.Data, &order)
 	if err != nil {
-		log.Println(err)
+		log.Println(errors.New("invalid input structure"))
 		return
 	}
 
@@ -32,4 +33,6 @@ func (h *OrdersHandler) Create(m *stan.Msg) {
 		log.Println(err)
 		return
 	}
+
+	log.Println("Order created")
 }

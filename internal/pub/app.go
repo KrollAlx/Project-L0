@@ -22,12 +22,14 @@ func Run() {
 	defer sc.Close()
 
 	content, err := ioutil.ReadFile("assets/model.json")
+	//_, err = ioutil.ReadFile("assets/model.json")
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
 	err = sc.Publish(channelName, content)
+	//err = sc.Publish(channelName, []byte("Hello world"))
 	if err != nil {
 		log.Println(err)
 		return
