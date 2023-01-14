@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	orderTemplatePath = "web/template/order.html"
-	ordersRoute       = "/orders/"
+	orderTemplatePath         = "web/template/order.html"
+	orderNotFoundTemplatePath = "web/template/order_not_found.html"
+	ordersRoute               = "/orders/"
 )
 
 type OrdersHandler struct {
@@ -29,7 +30,19 @@ func (h *OrdersHandler) GetOrder(w http.ResponseWriter, req *http.Request) {
 		log.Println(err)
 	}
 
-	order := h.service.Get(orderId)
+	order, err := h.service.Get(orderId)
+	if err != nil {
+		tmpl, _ := template.ParseFiles(orderNotFoundTemplatePath)
+		err = tmpl.Execute(w, struct {
+			OrderId int
+		}{
+			OrderId: orderId,
+		})
+		if err != nil {
+			log.Println(err)
+		}
+		return
+	}
 
 	tmpl, _ := template.ParseFiles(orderTemplatePath)
 	err = tmpl.Execute(w, order)

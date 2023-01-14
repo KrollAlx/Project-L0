@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"project-L0/internal/models"
 	"project-L0/internal/repository"
 )
@@ -8,7 +9,7 @@ import (
 type Orders interface {
 	RestoreCache() error
 	Create(order *models.Order) error
-	Get(id int) models.Order
+	Get(id int) (models.Order, error)
 }
 
 type OrdersService struct {
@@ -22,8 +23,11 @@ func New(repo repository.Orders) *OrdersService {
 
 func (s *OrdersService) RestoreCache() error {
 	orders, err := s.repo.GetAll()
+	if err != nil {
+		return err
+	}
 	s.ordersCache = orders
-	return err
+	return nil
 }
 
 func (s *OrdersService) Create(order *models.Order) error {
@@ -32,11 +36,11 @@ func (s *OrdersService) Create(order *models.Order) error {
 }
 
 // TODO: добавить ошибку ненайденного заказа
-func (s *OrdersService) Get(id int) models.Order {
+func (s *OrdersService) Get(id int) (models.Order, error) {
 	for _, ord := range s.ordersCache {
 		if ord.Id == id {
-			return ord
+			return ord, nil
 		}
 	}
-	return models.Order{}
+	return models.Order{}, errors.New("order not found")
 }
