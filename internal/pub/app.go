@@ -1,4 +1,4 @@
-package main
+package pub
 
 import (
 	"github.com/nats-io/stan.go"
@@ -7,12 +7,13 @@ import (
 )
 
 const (
-	clusterID = "test-cluster"
-	clientID  = "client-producer"
-	natsUrl   = "0.0.0.0:4223"
+	clusterID   = "test-cluster"
+	clientID    = "client-publisher"
+	natsUrl     = "0.0.0.0:4223"
+	channelName = "orders"
 )
 
-func main() {
+func Run() {
 	sc, err := stan.Connect(clusterID, clientID, stan.NatsURL(natsUrl))
 	if err != nil {
 		log.Println(err)
@@ -20,13 +21,13 @@ func main() {
 	}
 	defer sc.Close()
 
-	content, err := ioutil.ReadFile("model.json")
+	content, err := ioutil.ReadFile("assets/model.json")
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	err = sc.Publish("orders", content)
+	err = sc.Publish(channelName, content)
 	if err != nil {
 		log.Println(err)
 		return
