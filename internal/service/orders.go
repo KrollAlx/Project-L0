@@ -31,11 +31,14 @@ func (s *OrdersService) RestoreCache() error {
 }
 
 func (s *OrdersService) Create(order *models.Order) error {
+	err := s.repo.Create(order)
+	if err != nil {
+		return err
+	}
 	s.ordersCache = append(s.ordersCache, *order)
-	return s.repo.Create(order)
+	return nil
 }
 
-// TODO: добавить ошибку ненайденного заказа
 func (s *OrdersService) Get(id int) (models.Order, error) {
 	for _, ord := range s.ordersCache {
 		if ord.Id == id {
